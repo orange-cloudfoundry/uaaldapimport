@@ -26,6 +26,10 @@ type UserCreateResponse struct {
 	Id string
 }
 
+type UserCreateConflictResponse struct {
+	User_Id string
+}
+
 var NewRoundTripper = func() http.RoundTripper {
 	return &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -56,10 +60,17 @@ var Adduser functions.UaaAddUserFunc = func(info functions.UserInfo) (userId str
 	if err != nil {
 		return
 	}
-	return parse(response)
+
+	if response.StatusCode == 409 {
+		fmt.Println(fmt.Sprintf("user id: %s already exists, returning uuid.........", info.User.Uid))
+		userId, err = parseUserCreateConflict(response)
+	} else {
+		userId, err = parseUserCreateSuccess(response)
+	}
+	return
 }
 
-func parse(response *http.Response) (guid string, err error) {
+func parseUserCreateSuccess(response *http.Response) (guid string, err error) {
 	body := response.Body
 	defer body.Close()
 	uResponse := UserCreateResponse{}
@@ -72,5 +83,21 @@ func parse(response *http.Response) (guid string, err error) {
 		return
 	}
 	guid = uResponse.Id
+	return
+}
+
+func parseUserCreateConflict(response *http.Response) (guid string, err error) {
+	body := response.Body
+	defer body.Close()
+	uResponse := UserCreateConflictResponse{}
+	data, err := ioutil.ReadAll(body)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, &uResponse)
+	if err != nil {
+		return
+	}
+	guid = uResponse.User_Id
 	return
 }
